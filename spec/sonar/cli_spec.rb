@@ -21,6 +21,12 @@ describe Sonar::CLI do
       expect(output).to match(/email@asdfasdfasfd.com/)
     end
 
+    it "should locate stuff" do
+      output = run_command('locate rapid7.com')
+      expect(output).to match(/^\S+: \d+$/)
+      expect(output).to match(/^\S+: error$/)
+    end
+
     context 'client that returns an rdns resp' do
       before do
         allow_any_instance_of(Sonar::Client).to receive(:search).and_return(
