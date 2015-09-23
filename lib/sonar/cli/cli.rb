@@ -33,12 +33,17 @@ module Sonar
       Search::QUERY_TYPES_MAP.keys.each do |search_type|
         result = "#{search_type}:"
         count = nil
-        _search(search_type, term).each do |resp|
-          if resp['error']
-            break
-          else
-            count ||= 0
-            count += resp['collection'].size
+        response = @client.search(build_query(search_type, term, options))
+
+        if response.is_a?(Sonar::Request::RequestIterator)
+          response.each do |data|
+            this_batch = cleanup_data(data)
+            if this_batch['error']
+              break
+            else
+              count ||= 0
+              count += this_batch['collection'].size
+            end
           end
         end
 
@@ -50,8 +55,14 @@ module Sonar
     method_option 'record_limit', type: :numeric, aliases: '-n', desc: 'Maximum number of records to fetch'
     method_option 'exact', type: :boolean, aliases: '-e', desc: 'Search for the query string exactly, do not including partial string matches'
     def search(type, term)
-      _search(type, term).each do |data|
-        print_json(data, options['format'])
+      response = @client.search(build_query(type, term, options))
+
+      if response.is_a?(Sonar::Request::RequestIterator)
+        response.each do |data|
+          print_json(cleanup_data(data), options['format'])
+        end
+      else
+        print_json(cleanup_data(response), options['format'])
       end
     end
 
@@ -68,12 +79,12 @@ module Sonar
 
     private
 
-    def _search(type, term)
+    def build_query(type, term, options)
       query = {}
       query[type.to_sym] = term
       query[:limit] = options['record_limit']
       query[:exact] = options['exact']
-      cleanup_data(@client.search(query))
+      query
     end
 
     def print_json(data, format)
