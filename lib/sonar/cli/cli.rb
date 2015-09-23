@@ -26,23 +26,32 @@ module Sonar
       ap @client.usage
     end
 
-    desc 'search [QUERY TYPE] [QUERY TERM]', 'Search anything from Sonars'
+    desc 'locate [QUERY TERM]', 'Locate data in Sonar'
     method_option 'record_limit', type: :numeric, aliases: '-n', desc: 'Maximum number of records to fetch'
     method_option 'exact', type: :boolean, aliases: '-e', desc: 'Search for the query string exactly, do not including partial string matches'
-
-    def search(type, term)
-      @query = {}
-      @query[type.to_sym] = term
-      @query[:limit] = options['record_limit']
-      @query[:exact] = options['exact']
-      resp = @client.search(@query)
-
-      if resp.is_a?(Sonar::Request::RequestIterator)
-        resp.each do |data|
-          print_json(cleanup_data(data), options['format'])
+    def locate(term)
+      Search::QUERY_TYPES_MAP.keys.each do |search_type|
+        result = "#{search_type}:"
+        count = nil
+        _search(search_type, term).each do |resp|
+          if resp['error']
+            break
+          else
+            count ||= 0
+            count += resp['collection'].size
+          end
         end
-      else
-        print_json(cleanup_data(resp), options['format'])
+
+        puts count ? "#{search_type}: #{count}" : "#{search_type}: error"
+      end
+    end
+
+    desc 'search [QUERY TYPE] [QUERY TERM]', 'Search in Sonar'
+    method_option 'record_limit', type: :numeric, aliases: '-n', desc: 'Maximum number of records to fetch'
+    method_option 'exact', type: :boolean, aliases: '-e', desc: 'Search for the query string exactly, do not including partial string matches'
+    def search(type, term)
+      _search(type, term).each do |data|
+        print_json(data, options['format'])
       end
     end
 
@@ -58,6 +67,14 @@ module Sonar
     end
 
     private
+
+    def _search(type, term)
+      query = {}
+      query[type.to_sym] = term
+      query[:limit] = options['record_limit']
+      query[:exact] = options['exact']
+      cleanup_data(@client.search(query))
+    end
 
     def print_json(data, format)
       case format
